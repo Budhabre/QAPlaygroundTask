@@ -1,0 +1,124 @@
+name: Test | Selenium - Linux
+run-name: 🚀 Test | Selenium - Linux - ${{github.ref_name}} by @${{ github.actor }}
+
+#######################################################
+# Version: 1.0.0
+#######################################################
+# TODO: Add notification mechanism for completion of the test.
+# TODO: Add certificate import for selenium-wire in the browser.
+# TODO: Add notification mechanism on fail/success.
+# TODO: Save results as artifacts.
+# TODO: Optimize packages.
+#######################################################
+# Setup
+# 1. Create required environments/secrets in the repository.
+# 2. Setup secrets and variables for them.
+# 3. Run pipeline.
+#######################################################
+
+on:
+  # push:
+  #   branches: [ "master", "main" ]
+  # pull_request:
+  #   branches: [ "main", "main" ]
+  workflow_dispatch:
+    inputs:
+      pythonVersion:
+        description: 'Python Version'
+        default: '3.11'
+        required: false
+      firefoxVersion:
+        description: 'Firefox Version'
+        default: '121.0'
+        required: false
+      edgeVersion:
+        description: 'Edge Version'
+        default: 'stable'
+        required: false
+      chromeVersion:
+        description: 'Chrome Version'
+        default: 'stable'
+        required: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.PROJECT_FOLDER }}
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: ['Firefox', 'Chrome']
+        resolution: ['1024x768', '1920x1080']
+    env:
+      PYTHON_VERSION: ${{ github.event.inputs.pythonVersion }}
+      FIREFOX_VERSION: ${{ github.event.inputs.firefoxVersion }}
+      EDGE_VERSION: ${{ github.event.inputs.edgeVersion }}
+      CHROME_VERSION: ${{ github.event.inputs.chromeVersion }}
+      PROJECT_FOLDER: "./python/selenium"
+      REQUIREMENTS_FILE: "requirements-linux.txt"
+
+    steps:
+
+      - name: Setup repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Setup Chrome
+        if: contains(matrix.driver, 'Chrome')
+        uses: browser-actions/setup-chrome@latest
+        with:
+          chrome-version: ${{ env.CHROME_VERSION }}
+
+      - name: Setup Firefox
+        if: contains(matrix.driver, 'Firefox')
+        uses: browser-actions/setup-firefox@latest
+        with:
+          firefox-version: ${{ env.FIREFOX_VERSION }}
+
+      - name: Setup Edge
+        if: contains(matrix.driver, 'Edge')
+        uses: browser-actions/setup-edge@latest
+        with:
+          edge-version: ${{ env.EDGE_VERSION }}
+
+      - name: Check pre-requisites - Firefox
+        if: contains(matrix.driver, 'Firefox')
+        run: |
+          firefox --version
+
+      - name: Check pre-requisites - Chrome
+        if: contains(matrix.driver, 'Chrome')
+        run: |
+          chrome --version
+
+      - name: Check pre-requisites - Edge
+        if: contains(matrix.driver, 'Edge')
+        run: |
+          microsoft-edge --version
+
+      - name: Check pre-requisites - generic
+        run: |
+          uname -a
+          cat /etc/*release
+          python3 --version
+          pip --version
+
+      - name: Install dependencies
+        run: |
+          pip install -r ${{ env.REQUIREMENTS_FILE }}
+
+      - name: Run tests
+        run: |
+          IFS='x' read -ra RES <<< "${{ matrix.resolution }}"
+          export CFG_DRIVER_NAME=${{ matrix.driver }}
+          export CFG_DRIVER_WIDTH=${RES[0]}
+          export CFG_DRIVER_HEIGHT=${RES[1]}
+          python3 -m pytest --capture=no --verbose main.py --cache-clear
